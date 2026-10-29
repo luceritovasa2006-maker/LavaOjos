@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SST - Control e Inspección de Lavaojos</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Librería de Firma Digital -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --primary-hover: #0b5ed7;
+            --secondary-color: #6c757d;
+        }
+
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar-custom {
+            background-color: var(--primary-color);
+        }
+
+        .card-custom {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            background: #ffffff;
+        }
+
+        .header-title {
+            color: var(--primary-color);
+            font-weight: 700;
+        }
+
+        .table-sst th {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .signature-pad-container {
+            border: 2px dashed var(--primary-color);
+            border-radius: 8px;
+            background-color: #ffffff;
+            position: relative;
+            width: 100%;
+            height: 180px;
+            touch-action: none;
+        }
+
+        canvas.signature-pad {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 6px;
+        }
+
+        .photo-preview {
+            width: 90px;
+            height: 90px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+        }
+
+        .photo-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .btn-remove-photo {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: 12px;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        #reader {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--primary-color);
+        }
+
+        .badge-ok { background-color: #198754; }
+        .badge-warn { background-color: #ffc107; color: #000; }
+        .badge-danger { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top shadow-sm">
+        <div class="container-fluid max-w-7xl">
+            <a class="navbar-brand d-flex items-center gap-2 font-bold" href="#">
+                <i class="fa-solid fa-droplet fa-lg"></i>
+                <span>SST LAVAOJOS - CONTROL E INSPECCIÓN</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto gap-2">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light btn-sm w-100" onclick="showSection('dashboard')">
+                            <i class="fa-solid fa-chart-pie me-1"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="btn btn-light text-primary btn-sm w-100 fw-bold" onclick="showSection('inspection-form')">
+                            <i class="fa-solid fa-clipboard-check me-1"></i> Nueva Inspección
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light btn-sm w-100" onclick="showSection('history')">
+                            <i class="fa-solid fa-clock-rotate-left me-1"></i> Historial
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="btn btn-warning text-dark btn-sm w-100 fw-bold" onclick="exportToCSV()">
+                            <i class="fa-solid fa-file-excel me-1"></i> Exportar Excel
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container my-4">
+
+        <!-- DASHBOARD -->
+        <div id="section-dashboard" class="app-section">
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="card card-custom p-3 border-start border-4 border-success">
+                        <small class="text-muted fw-bold">TOTAL REG.</small>
+                        <h3 class="mb-0 fw-bold text-dark" id="dash-total">0</h3>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card card-custom p-3 border-start border-4 border-primary">
+                        <small class="text-muted fw-bold">OPERATIVOS (OK)</small>
+                        <h3 class="mb-0 fw-bold text-primary" id="dash-ok">0</h3>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card card-custom p-3 border-start border-4 border-warning">
+                        <small class="text-muted fw-bold">MANTENIMIENTO</small>
+                        <h3 class="mb-0 fw-bold text-warning" id="dash-warn">0</h3>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card card-custom p-3 border-start border-4 border-danger">
+                        <small class="text-muted fw-bold">INOPERATIVOS</small>
+                        <h3 class="mb-0 fw-bold text-danger" id="dash-danger">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-custom p-4 text-center">
+                <h4 class="header-title mb-3"><i class="fa-solid fa-qrcode me-2"></i>Escanear Lavaojos In Situ</h4>
+                <p class="text-muted">Apunta con la cámara del celular al código QR del lavaojos para abrir su inspección.</p>
+                <div class="d-flex justify-content-center gap-2">
+                    <button class="btn btn-primary btn-lg px-4" onclick="openQRModal()">
+                        <i class="fa-solid fa-camera me-2"></i> Escanear QR
+                    </button>
+                    <button class="btn btn-outline-secondary btn-lg" onclick="showSection('inspection-form')">
+                        <i class="fa-solid fa-pen-to-square me-2"></i> Registro Manual
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FORMULARIO DE INSPECCIÓN -->
+        <div id="section-inspection-form" class="app-section d-none">
+            <form id="form-lavaojos" onsubmit="saveInspection(event)">
+                
+                <!-- Datos del Lavaojos (CON FECHA DE INSPECCIÓN INCLUIDA) -->
+                <div class="card card-custom p-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                        <h4 class="header-title mb-0"><i class="fa-solid fa-clipboard-list me-2"></i>Datos del Lavaojos</h4>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openQRModal()">
+                            <i class="fa-solid fa-qrcode me-1"></i> Escanear QR
+                        </button>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Número / ID Lavaojos *</label>
+                            <select id="lav-id" class="form-select fw-bold text-primary" required onchange="autoFillData()">
+                                <option value="">Seleccione o escanee...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">Ubicación / Área *</label>
+                            <input type="text" id="lav-location" class="form-control" required placeholder="Ej: Almacén General">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Fecha Inspección *</label>
+                            <input type="date" id="lav-date" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VERIFICACIÓN (ANEXA) -->
+                <div class="card card-custom p-4 mb-4">
+                    <h4 class="header-title border-bottom pb-2 mb-3">
+                        <i class="fa-solid fa-list-check me-2"></i>Verificación (Anexa - Criterios SST)
+                    </h4>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sst">
+                            <thead>
+                                <tr>
+                                    <th style="width: 45%;">Pregunta / Elemento a Verificar</th>
+                                    <th style="width: 20%;">Cumple / No Cumple</th>
+                                    <th style="width: 35%;">Observación Individual</th>
+                                </tr>
+                            </thead>
+                            <tbody id="checklist-tbody">
+                                <!-- Generado dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- DICTAMEN Y FIRMA -->
+                <div class="card card-custom p-4 mb-4">
+                    <h4 class="header-title border-bottom pb-2 mb-3">
+                        <i class="fa-solid fa-camera-retro me-2"></i>Dictamen, Evidencias y Firma
+                    </h4>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Dictamen / Estado Final *</label>
+                        <select id="lav-status" class="form-select fw-bold text-dark" required>
+                            <option value="OK" class="text-success fw-bold">🟢 CONFORME / OPERATIVO (OK)</option>
+                            <option value="Mantenimiento" class="text-warning fw-bold">🟡 REQUIERE MANTENIMIENTO</option>
+                            <option value="Inoperativo" class="text-danger fw-bold">🔴 NO CONFORME / FUERA DE SERVICIO</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Adjuntar Fotos de Evidencia *</label>
+                        <input type="file" id="lav-photo-input" accept="image/*" capture="environment" class="form-control" multiple onchange="handlePhotoUpload(event)">
+                        <div id="photo-preview-container" class="d-flex flex-wrap gap-2 mt-3"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nombre del Inspector / Auditor SST *</label>
+                        <input type="text" id="lav-inspector" class="form-control" required placeholder="Ej. Andressa Gomez">
+                    </div>
+
+                    <div class="mb-3 pt-2 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold mb-0">Firma Digital del Inspector</label>
+                            <button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="clearSignature()">Limpiar</button>
+                        </div>
+                        <div class="signature-pad-container">
+                            <canvas id="signature-pad" class="signature-pad"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mb-5">
+                    <button type="button" class="btn btn-secondary px-4" onclick="showSection('dashboard')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">
+                        <i class="fa-solid fa-floppy-disk me-2"></i> Guardar Inspección
+                    </button>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- HISTORIAL -->
+        <div id="section-history" class="app-section d-none">
+            <div class="card card-custom p-4">
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
+                    <h4 class="header-title mb-0"><i class="fa-solid fa-boxes-packing me-2"></i>Historial de Lavaojos</h4>
+                    <button class="btn btn-warning text-dark font-bold btn-sm" onclick="exportToCSV()">
+                        <i class="fa-solid fa-file-csv me-1"></i> Exportar CSV
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>ID</th>
+                                <th>Ubicación</th>
+                                <th>Estado</th>
+                                <th>Inspector</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL QR -->
+    <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fa-solid fa-camera me-2"></i>Escanear QR Lavaojos</h5>
+                    <button type="button" class="btn-close btn-close-white" onclick="closeQRModal()"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div id="reader"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeQRModal()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DETALLE -->
+    <div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title" id="modal-detail-title">Detalle Lavaojos</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modal-detail-body"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const checklistItems = [
+            "La válvula, palanca o mecanismo de activación funciona correctamente.",
+            "Las boquillas cuentan con protectores.",
+            "Las tuberías, mangueras y conexiones presentan fugas.",
+            "La estructura presenta deterioro.",
+            "¿Se encuentra el registro de cambio de agua mensual?",
+            "¿Se encuentra señalizado?",
+            "¿Esta libre de obstaculos, es de facil acceso?",
+            "Se garantiza el flujo de agua continuo",
+            "¿La presion del agua es regulada y segura para los ojos?",
+            "Las normas de uso de agua estan publicadas",
+            "Se encuentra en buen estado y funcionando?"
+        ];
+
+        const masterLavaojos = [
+            { id: "LAV-001", ubicacion: "ALMACÉN GENERAL" },
+            { id: "LAV-002", ubicacion: "DEPÓSITO DE COMBUSTIBLE" },
+            { id: "LAV-003", ubicacion: "POSTCOSECHA" },
+            { id: "LAV-004", ubicacion: "ALMACÉN DE FERTILIZANTES" },
+            { id: "LAV-005", ubicacion: "TALLER DE MANTENIMIENTO" },
+            { id: "LAV-006", ubicacion: "RESPEL" },
+            { id: "LAV-007", ubicacion: "BOMBA MIPE 1" },
+            { id: "LAV-008", ubicacion: "BOMBA MIPE 2" },
+            { id: "LAV-009", ubicacion: "BOMBA MIPE 3" },
+            { id: "LAV-010", ubicacion: "BOMBA MIPE 4" },
+            { id: "LAV-011", ubicacion: "BOMBA MIPE 5" },
+            { id: "LAV-012", ubicacion: "BOMBA MIRFE 1" },
+            { id: "LAV-013", ubicacion: "BOMBA MIRFE 2" }
+        ];
+
+        let inspections = [];
+        let currentPhotos = [];
+        let html5QrCode = null;
+        let signaturePad = null;
+
+        window.onload = function() {
+            populateDropdown();
+            loadStorage();
+            renderChecklist();
+            updateDashboard();
+            renderHistory();
+            initSignaturePad();
+            checkUrlParams();
+            document.getElementById('lav-date').value = new Date().toISOString().split('T')[0];
+        };
+
+        function populateDropdown() {
+            const select = document.getElementById('lav-id');
+            select.innerHTML = '<option value="">Seleccione o escanee...</option>';
+            masterLavaojos.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = `${item.id} - ${item.ubicacion}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function loadStorage() {
+            const data = localStorage.getItem('sst_lavaojos_data');
+            if (data) {
+                inspections = JSON.parse(data);
+            } else {
+                inspections = masterLavaojos.map(e => ({
+                    id: e.id, location: e.ubicacion, status: "OK", date: "2026-10-23", inspector: "Andressa Gomez",
+                    checklist: checklistItems.reduce((acc, curr) => { acc[curr] = { result: 'Cumple', obs: 'OK' }; return acc; }, {}),
+                    photos: [], signature: null
+                }));
+                saveStorage();
+            }
+        }
+
+        function saveStorage() {
+            localStorage.setItem('sst_lavaojos_data', JSON.stringify(inspections));
+        }
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.app-section').forEach(el => el.classList.add('d-none'));
+            document.getElementById(`section-${sectionId}`).classList.remove('d-none');
+            if (sectionId === 'history') renderHistory();
+            if (sectionId === 'dashboard') updateDashboard();
+            if (sectionId === 'inspection-form') setTimeout(resizeCanvas, 200);
+        }
+
+        function renderChecklist() {
+            const tbody = document.getElementById('checklist-tbody');
+            tbody.innerHTML = '';
+            checklistItems.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-bold text-dark">${item}</td>
+                    <td>
+                        <select class="form-select form-select-sm check-result" data-item="${item}">
+                            <option value="Cumple" selected>Cumple</option>
+                            <option value="No Cumple">No Cumple</option>
+                            <option value="N/A">N/A</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm check-obs" data-item="${item}" placeholder="Observación...">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function autoFillData() {
+            const codeId = document.getElementById('lav-id').value.trim();
+            const masterInfo = masterLavaojos.find(e => e.id === codeId);
+            if (masterInfo) {
+                document.getElementById('lav-location').value = masterInfo.ubicacion;
+            }
+        }
+
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const num = urlParams.get('id');
+            if (num) {
+                const formattedId = `LAV-${String(num).padStart(3, '0')}`;
+                document.getElementById('lav-id').value = formattedId;
+                autoFillData();
+                showSection('inspection-form');
+            }
+        }
+
+        function handlePhotoUpload(event) {
+            const files = event.target.files;
+            if (!files) return;
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    currentPhotos.push(e.target.result);
+                    renderPhotoPreviews();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderPhotoPreviews() {
+            const container = document.getElementById('photo-preview-container');
+            container.innerHTML = '';
+            currentPhotos.forEach((src, idx) => {
+                const div = document.createElement('div');
+                div.className = 'photo-container';
+                div.innerHTML = `
+                    <img src="${src}" class="photo-preview">
+                    <button type="button" class="btn-remove-photo" onclick="removePhoto(${idx})">&times;</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removePhoto(index) {
+            currentPhotos.splice(index, 1);
+            renderPhotoPreviews();
+        }
+
+        function initSignaturePad() {
+            const canvas = document.getElementById('signature-pad');
+            signaturePad = new SignaturePad(canvas, { penColor: '#0d6efd', minWidth: 1.5, maxWidth: 3.5 });
+            window.addEventListener("resize", resizeCanvas);
+            resizeCanvas();
+        }
+
+        function resizeCanvas() {
+            const canvas = document.getElementById('signature-pad');
+            if (!canvas) return;
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            if (signaturePad) signaturePad.clear();
+        }
+
+        function clearSignature() {
+            if (signaturePad) signaturePad.clear();
+        }
+
+        function saveInspection(e) {
+            e.preventDefault();
+            const lavId = document.getElementById('lav-id').value.trim();
+            const location = document.getElementById('lav-location').value.trim();
+            const status = document.getElementById('lav-status').value;
+            const date = document.getElementById('lav-date').value;
+            const inspector = document.getElementById('lav-inspector').value;
+
+            const checklistData = {};
+            const results = document.querySelectorAll('.check-result');
+            const obss = document.querySelectorAll('.check-obs');
+
+            results.forEach((resEl, i) => {
+                const itemKey = resEl.getAttribute('data-item');
+                checklistData[itemKey] = { result: resEl.value, obs: obss[i].value || 'Sin observaciones' };
+            });
+
+            const newRecord = {
+                id: lavId, location, status, date, inspector,
+                checklist: checklistData, photos: [...currentPhotos],
+                signature: signaturePad && !signaturePad.isEmpty() ? signaturePad.toDataURL() : null
+            };
+
+            const index = inspections.findIndex(i => i.id === lavId);
+            if (index >= 0) { inspections[index] = newRecord; } else { inspections.unshift(newRecord); }
+
+            saveStorage();
+            alert(`¡Inspección guardada para el ${lavId}!`);
+            document.getElementById('form-lavaojos').reset();
+            currentPhotos = [];
+            renderPhotoPreviews();
+            clearSignature();
+            showSection('dashboard');
+        }
+
+        function openQRModal() {
+            const modal = new bootstrap.Modal(document.getElementById('qrModal'));
+            modal.show();
+            setTimeout(() => {
+                html5QrCode = new Html5Qrcode("reader");
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    (decodedText) => {
+                        let matchId = decodedText;
+                        if (decodedText.includes('id=')) {
+                            const urlParams = new URLSearchParams(decodedText.split('?')[1]);
+                            matchId = `LAV-${String(urlParams.get('id')).padStart(3, '0')}`;
+                        }
+                        document.getElementById('lav-id').value = matchId;
+                        autoFillData();
+                        closeQRModal();
+                        showSection('inspection-form');
+                    },
+                    (errorMessage) => {}
+                ).catch(err => console.log(err));
+            }, 300);
+        }
+
+        function closeQRModal() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                    const modalEl = document.getElementById('qrModal');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                }).catch(err => console.log(err));
+            }
+        }
+
+        function updateDashboard() {
+            document.getElementById('dash-total').innerText = masterLavaojos.length;
+            document.getElementById('dash-ok').innerText = inspections.filter(i => i.status === 'OK').length;
+            document.getElementById('dash-warn').innerText = inspections.filter(i => i.status === 'Mantenimiento').length;
+            document.getElementById('dash-danger').innerText = inspections.filter(i => i.status === 'Inoperativo').length;
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '';
+            inspections.forEach(item => {
+                let badgeClass = item.status === 'OK' ? 'badge-ok' : item.status === 'Mantenimiento' ? 'badge-warn' : 'badge-danger';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.date}</td>
+                    <td class="fw-bold text-primary">${item.id}</td>
+                    <td>${item.location}</td>
+                    <td><span class="badge ${badgeClass}">${item.status}</span></td>
+                    <td>${item.inspector}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewDetail('${item.id}')"><i class="fa-solid fa-eye"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function viewDetail(id) {
+            const item = inspections.find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('modal-detail-title').innerText = `Detalle Lavaojos: ${item.id}`;
+            let checklistHtml = '<ul class="list-group list-group-flush mb-3">';
+            for (const [key, val] of Object.entries(item.checklist || {})) {
+                checklistHtml += `<li class="list-group-item d-flex justify-content-between"><div><strong>${key}</strong><br><small>Obs: ${val.obs}</small></div><span class="fw-bold">${val.result}</span></li>`;
+            }
+            checklistHtml += '</ul>';
+            let photosHtml = '<div class="d-flex flex-wrap gap-2 mb-3">';
+            (item.photos || []).forEach(p => { photosHtml += `<img src="${p}" style="width:100px; height:100px; object-fit:cover; border-radius:8px;">`; });
+            photosHtml += '</div>';
+
+            document.getElementById('modal-detail-body').innerHTML = `
+                <div class="row mb-3">
+                    <div class="col-6"><strong>Ubicación:</strong> ${item.location}</div>
+                    <div class="col-6"><strong>Estado:</strong> ${item.status}</div>
+                    <div class="col-6"><strong>Fecha:</strong> ${item.date}</div>
+                </div>
+                <h6>Verificación:</h6> ${checklistHtml}
+                <h6>Fotos:</h6> ${photosHtml}
+                ${item.signature ? `<h6>Firma:</h6><img src="${item.signature}" style="max-height:70px; border:1px solid #ccc;">` : ''}
+            `;
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
+        }
+
+        function exportToCSV() {
+            let csv = "\uFEFFID,Ubicacion,Estado,Fecha,Inspector\n";
+            inspections.forEach(i => { csv += `"${i.id}","${i.location}","${i.status}","${i.date}","${i.inspector}"\n`; });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `Reporte_Lavaojos_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
